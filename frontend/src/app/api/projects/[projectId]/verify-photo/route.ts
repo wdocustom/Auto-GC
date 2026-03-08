@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { uploadToSupabase } from '@/lib/storage';
 import { analyzeSitePhoto } from '@/lib/ai/vision';
+import { runLogisticsAgent } from '@/lib/ai/logistics-runner';
 
 export async function POST(
   req: Request,
@@ -60,28 +61,8 @@ export async function POST(
         },
       });
 
-      // Cascade: find downstream milestones that depend on this one
-      const downstream = await prisma.milestone.findMany({
-        where: {
-          projectId,
-          dependsOn: { some: { id: milestoneId } },
-        },
-        include: { dependsOn: true },
-      });
-
-      for (const next of downstream) {
-        // Check if ALL prerequisites are now VERIFIED
-        const allPrereqsMet = next.dependsOn.every(
-          dep => dep.id === milestoneId || dep.status === 'VERIFIED',
-        );
-
-        if (allPrereqsMet) {
-          // TODO: SMS the assigned sub that their work is unblocked
-          console.log(
-            `[DAG] Milestone "${next.title}" is now unblocked (assignedSubId: ${next.assignedSubId}, leadTime: ${next.leadTimeDays}d)`,
-          );
-        }
-      }
+      // Run the Logistics Orchestrator to cascade schedule updates and dispatch subs
+      await runLogisticsAgent(projectId, milestoneId, 'VERIFIED');
 
     } else if (visionAnalysis.action === 'REJECT' || visionAnalysis.qualityIssuesDetected) {
       // Auto-reject and log for the Orchestrator to text the sub
@@ -93,7 +74,8 @@ export async function POST(
         },
       });
 
-      // TODO: Trigger Event -> SMS the sub with the feedback
+      // Run logistics to propagate delay warnings to downstream subs
+      await runLogisticsAgent(projectId, milestoneId, 'DELAYED');
 
     } else {
       // FLAG_FOR_HUMAN — log reasoning without changing milestone status
