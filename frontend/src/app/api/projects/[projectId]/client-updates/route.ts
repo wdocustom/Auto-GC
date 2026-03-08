@@ -46,7 +46,15 @@ export async function POST(
       take: 10,
     });
 
-    // 4. Generate the curated update via Concierge AI
+    // 4. Gather recent event log (last 48 hours of communications)
+    const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const recentEvents = await prisma.communication.findMany({
+      where: { projectId, createdAt: { gte: cutoff } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    // 5. Generate the curated update via Concierge AI
     const draft = await generateClientUpdate({
       projectName: project.name,
       projectAddress: project.address,
@@ -54,19 +62,24 @@ export async function POST(
       recentMilestones,
       upcomingMilestones,
       recentMedia,
+      recentEvents,
       subcontractors: project.subcontractors,
       hasMilestonePayment,
     });
 
-    // 5. Persist the update as unpublished (GC can review before publishing)
+    // 6. Resolve curated photo IDs to URLs for storage
+    const curatedPhotos = recentMedia.filter(m => draft.curatedPhotoIds.includes(m.id));
+    const curatedPhotoUrls = curatedPhotos.map(m => m.url);
+
+    // 7. Persist the update as unpublished (GC can review before publishing)
     const clientUpdate = await prisma.clientUpdate.create({
       data: {
         projectId,
         title: draft.title,
         executiveSummary: draft.executiveSummary,
         sentiment: draft.sentiment,
-        curatedPhotoUrls: draft.curatedPhotoUrls,
-        isMilestonePayment: draft.isMilestonePayment,
+        curatedPhotoUrls,
+        isMilestonePayment: draft.financialTrigger === 'INVOICE_READY',
         published: false,
       },
     });
