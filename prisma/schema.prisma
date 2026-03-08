@@ -45,6 +45,7 @@ model Project {
   media             SiteMedia[]
   subcontractors    ProjectSub[]
   clients           User[]
+  clientUpdates     ClientUpdate[]
   createdAt         DateTime       @default(now())
 }
 
@@ -103,6 +104,26 @@ model ProjectSub {
   trade           String    // e.g., Plumbing, Electrical
   phoneNumber     String
   rating          Float     @default(5.0)
+}
+
+model ClientUpdate {
+  id              String    @id @default(uuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id])
+
+  // The Curated Content
+  title           String    // e.g., "Framing Complete & Plumbing Begins"
+  executiveSummary String   // The AI-generated, white-glove update
+  sentiment       String    // POSITIVE, NEUTRAL, ALERT
+
+  // Media Linked to this Update
+  curatedPhotoUrls String[] // Array of URLs filtered by the Concierge
+
+  // Financial/Schedule Transparency
+  isMilestonePayment Boolean @default(false)
+
+  createdAt       DateTime  @default(now())
+  published       Boolean   @default(false) // Allows GC to review, or set to auto-publish
 }
 
 model User {
