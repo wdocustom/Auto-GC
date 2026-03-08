@@ -1,4 +1,4 @@
-import type { Milestone, SiteMedia, Communication, ProjectSub } from '@prisma/client';
+import type { Milestone, SiteMedia, Communication, ProjectSub, Project } from '@prisma/client';
 
 export interface ConciergeContext {
   projectName: string;
@@ -142,4 +142,45 @@ export async function generateClientUpdate(ctx: ConciergeContext): Promise<Clien
     curatedPhotoIds: safePhotos.slice(0, 2).map(m => m.id),
     financialTrigger: ctx.hasMilestonePayment ? 'INVOICE_READY' : 'NONE',
   };
+}
+
+/** Simplified context used by the engine-style runner (generateClientSummary). */
+export interface DraftClientUpdateContext {
+  activity: Project & {
+    milestones: Milestone[];
+    communications: Communication[];
+    media: SiteMedia[];
+    subcontractors?: ProjectSub[];
+    clients?: { id: string; email: string; role: string }[];
+  };
+}
+
+/**
+ * Entry point matching the blueprint's draftClientUpdate pattern.
+ * Accepts the raw project activity and transforms it into ConciergeContext internally.
+ */
+export async function draftClientUpdate(
+  ctx: DraftClientUpdateContext,
+): Promise<ClientUpdateDraft> {
+  const { activity } = ctx;
+
+  const recentMilestones = activity.milestones.filter(
+    m => m.status === 'VERIFIED' && m.actualEnd,
+  ).slice(0, 5);
+
+  const upcomingMilestones = activity.milestones.filter(
+    m => m.status === 'PENDING' || m.status === 'IN_PROGRESS',
+  ).slice(0, 5);
+
+  return generateClientUpdate({
+    projectName: activity.name,
+    projectAddress: activity.address,
+    progressPercent: activity.progressPercent,
+    recentMilestones,
+    upcomingMilestones,
+    recentMedia: activity.media,
+    recentEvents: activity.communications,
+    subcontractors: activity.subcontractors ?? [],
+    hasMilestonePayment: false,
+  });
 }
