@@ -96,3 +96,45 @@ export async function createConnectAccount(
     metadata: { businessName },
   });
 }
+
+/**
+ * Creates and sends a Stripe Invoice for a client draw.
+ * Uses the Invoices API with `send_invoice` collection method
+ * so the client receives an email and can pay online.
+ *
+ * @param amountCents - Amount in cents
+ * @param customerId - The client's Stripe Customer ID
+ * @param description - Line item description (e.g., "Draw 2: Framing phase")
+ * @param projectId - For metadata tracking
+ * @param milestoneId - Ties the invoice to verified work
+ * @returns The finalized and sent Invoice object
+ */
+export async function createAndSendInvoice(
+  amountCents: number,
+  customerId: string,
+  description: string,
+  projectId: string,
+  milestoneId: string,
+): Promise<Stripe.Invoice> {
+  const invoice = await stripe.invoices.create({
+    customer: customerId,
+    collection_method: 'send_invoice',
+    days_until_due: 3,
+    metadata: {
+      projectId,
+      milestoneId,
+      type: 'CLIENT_DRAW_INVOICE',
+    },
+  });
+
+  await stripe.invoiceItems.create({
+    customer: customerId,
+    invoice: invoice.id,
+    amount: amountCents,
+    currency: 'usd',
+    description,
+  });
+
+  const finalizedInvoice = await stripe.invoices.sendInvoice(invoice.id);
+  return finalizedInvoice;
+}

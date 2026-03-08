@@ -154,3 +154,6 @@ export async function analyzeProjectFinancials(ctx: CFOContext): Promise<Financi
     subcontractorPayouts: [],
   };
 }
+
+/** Alias used by processFinancialState runner. */
+export const runFinancialAnalysis = analyzeProjectFinancials;
