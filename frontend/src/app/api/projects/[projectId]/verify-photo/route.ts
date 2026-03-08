@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyMilestonePhoto } from '@/lib/ai/vision';
+import { uploadToSupabase } from '@/lib/storage';
+import { analyzeSitePhoto } from '@/lib/ai/vision';
 
 export async function POST(
   req: Request,
@@ -8,28 +9,21 @@ export async function POST(
 ) {
   try {
     const { projectId } = await params;
-    const body = await req.json();
-    const { milestoneId, imageUrl } = body as {
-      milestoneId: string;
-      imageUrl: string;
-    };
+    const formData = await req.formData();
+    const file = formData.get('photo') as File;
+    const milestoneId = formData.get('milestoneId') as string;
 
-    if (!milestoneId || !imageUrl) {
+    if (!file || !milestoneId) {
       return NextResponse.json(
-        { error: 'Missing required fields: milestoneId, imageUrl' },
+        { error: 'Missing required fields: photo, milestoneId' },
         { status: 400 },
       );
     }
 
-    // 1. Load the project and milestone
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-    });
+    // 1. Upload the image to Supabase Storage to get a public URL
+    const imageUrl = await uploadToSupabase(file, `projects/${projectId}`);
 
-    if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    }
-
+    // 2. Fetch the specific milestone context
     const milestone = await prisma.milestone.findFirst({
       where: { id: milestoneId, projectId },
     });
@@ -38,50 +32,64 @@ export async function POST(
       return NextResponse.json({ error: 'Milestone not found' }, { status: 404 });
     }
 
-    // 2. Run Vision Verification
-    const verdict = await verifyMilestonePhoto({
+    // 3. The Agentic Reasoning Step (Pass to Vision LLM)
+    const visionAnalysis = await analyzeSitePhoto({
       imageUrl,
-      milestone,
-      projectName: project.name,
-      projectAddress: project.address,
+      milestoneDescription: milestone.description,
     });
 
-    // 3. Store the photo and analysis in SiteMedia
+    // 4. Log the Media and the AI's Analysis in the Black Box
     await prisma.siteMedia.create({
       data: {
         projectId,
         url: imageUrl,
         type: 'IMAGE',
-        visionAnalysis: JSON.stringify(verdict),
+        visionAnalysis: JSON.stringify(visionAnalysis),
       },
     });
 
-    // 4. Act on the verdict
-    if (verdict.action === 'APPROVE') {
+    // 5. Autonomous Decision Logic
+    if (visionAnalysis.action === 'APPROVE' && visionAnalysis.confidenceScore > 85) {
+      // Auto-approve the milestone
       await prisma.milestone.update({
         where: { id: milestoneId },
         data: {
           status: 'VERIFIED',
+          visionLog: visionAnalysis.visualEvidence,
           actualEnd: new Date(),
-          visionLog: verdict.visualEvidence,
         },
       });
-    } else {
-      // REJECT or FLAG_FOR_HUMAN — log the reasoning but don't auto-verify
+
+      // TODO: Trigger Event -> Notify Next Subcontractor in Gantt sequence
+
+    } else if (visionAnalysis.action === 'REJECT' || visionAnalysis.qualityIssuesDetected) {
+      // Auto-reject and log for the Orchestrator to text the sub
       await prisma.milestone.update({
         where: { id: milestoneId },
         data: {
-          visionLog: `[${verdict.action}] ${verdict.visualEvidence}`,
+          status: 'NEEDS_REWORK',
+          visionLog: visionAnalysis.subcontractorFeedback,
+        },
+      });
+
+      // TODO: Trigger Event -> SMS the sub with the feedback
+
+    } else {
+      // FLAG_FOR_HUMAN — log reasoning without changing milestone status
+      await prisma.milestone.update({
+        where: { id: milestoneId },
+        data: {
+          visionLog: `[FLAG_FOR_HUMAN] ${visionAnalysis.visualEvidence}`,
         },
       });
     }
 
     return NextResponse.json({
       success: true,
-      verdict,
+      analysis: visionAnalysis,
     });
   } catch (error) {
     console.error('Vision Verification Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to process site photo' }, { status: 500 });
   }
 }

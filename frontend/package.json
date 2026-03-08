@@ -23,7 +23,8 @@
     "tailwind-merge": "^2.6.0",
     "lucide-react": "^0.469.0",
     "date-fns": "^4.1.0",
-    "@prisma/client": "^6.3.0"
+    "@prisma/client": "^6.3.0",
+    "@supabase/supabase-js": "^2.49.0"
   },
   "devDependencies": {
     "prisma": "^6.3.0",
