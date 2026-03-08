@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { stripe } from '@/lib/payments/stripe';
+import { runFinancialAgent } from '@/lib/ai/cfo-runner';
 
 /**
  * POST /api/webhooks/stripe
@@ -36,6 +37,12 @@ export async function POST(req: Request) {
         data: { status: 'PAID' },
       });
       console.log(`[Stripe] Payment succeeded: ${paymentIntent.id}`);
+
+      // Client payment cleared — run CFO to check if sub payouts can be released
+      const projectId = (paymentIntent.metadata as Record<string, string>)?.projectId;
+      if (projectId) {
+        await runFinancialAgent(projectId, 'PAYMENT_RECEIVED', paymentIntent.id);
+      }
       break;
     }
 

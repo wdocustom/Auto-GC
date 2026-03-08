@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { runLogisticsAgent } from '@/lib/ai/logistics-runner';
+import { runFinancialAgent } from '@/lib/ai/cfo-runner';
 
 /**
  * POST /api/projects/:projectId/milestones/:milestoneId/event
@@ -45,9 +46,16 @@ export async function POST(
     // Run the Logistics Orchestrator
     const plan = await runLogisticsAgent(projectId, milestoneId, event);
 
+    // Run the Financial Orchestrator (draw invoices + sub payouts)
+    let financialPlan = null;
+    if (event === 'VERIFIED') {
+      financialPlan = await runFinancialAgent(projectId, 'MILESTONE_VERIFIED', milestoneId);
+    }
+
     return NextResponse.json({
       success: true,
       plan,
+      financialPlan,
     });
   } catch (error) {
     console.error('Milestone Event Error:', error);
