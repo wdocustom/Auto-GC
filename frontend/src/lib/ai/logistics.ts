@@ -13,6 +13,15 @@ export interface LogisticsContext {
   subcontractors: ProjectSub[];
 }
 
+/** Simplified context used by the engine-style caller. */
+export interface LogisticsGraphContext {
+  projectGraph: (Milestone & {
+    dependsOn: Milestone[];
+    prerequisiteFor: Milestone[];
+  })[];
+  triggerId: string;
+}
+
 export interface ScheduleUpdate {
   milestoneId: string;
   newScheduledStart: string; // YYYY-MM-DD
@@ -130,4 +139,24 @@ export async function planLogistics(ctx: LogisticsContext): Promise<LogisticsPla
     scheduleUpdates: [],
     dispatchActions: [],
   };
+}
+
+/**
+ * Simplified entry point that infers the trigger event from milestone status.
+ * Used by the engine-style runner (runLogisticsEngine).
+ */
+export async function calculateLogisticsGraph(
+  ctx: LogisticsGraphContext,
+): Promise<LogisticsPlan> {
+  const trigger = ctx.projectGraph.find(m => m.id === ctx.triggerId);
+  const triggerEvent: 'VERIFIED' | 'DELAYED' =
+    trigger?.status === 'VERIFIED' ? 'VERIFIED' : 'DELAYED';
+
+  return planLogistics({
+    projectName: '', // Filled in by the runner which has project context
+    triggerMilestoneId: ctx.triggerId,
+    triggerEvent,
+    milestones: ctx.projectGraph,
+    subcontractors: [],
+  });
 }
