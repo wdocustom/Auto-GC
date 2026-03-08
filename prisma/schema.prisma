@@ -38,6 +38,13 @@ enum AgentRole {
   CLIENT_CONCIERGE
 }
 
+enum AlertSeverity {
+  LOW       // Minor schedule shift
+  MEDIUM    // Sub texted a complex question the AI couldn't parse
+  HIGH      // Vision agent detected a safety hazard or failed inspection
+  CRITICAL  // Financial mismatch or client dispute
+}
+
 model Project {
   id                String         @id @default(uuid())
   name              String
@@ -61,6 +68,7 @@ model Project {
   clients           User[]
   clientUpdates     ClientUpdate[]
   transactions      Transaction[]
+  systemAlerts      SystemAlert[]
   createdAt         DateTime       @default(now())
 }
 
@@ -164,4 +172,25 @@ model User {
   role             String   // CLIENT or ADMIN
   stripeCustomerId String?  @unique // To charge the homeowner
   projects         Project[]
+}
+
+model SystemAlert {
+  id              String        @id @default(uuid())
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id])
+
+  severity        AlertSeverity
+  title           String
+  description     String        // Why the AI flagged this
+
+  // Context Pointers
+  milestoneId     String?       // Link to the specific task
+  communicationId String?       // Link to the confusing text message
+  mediaId         String?       // Link to the flagged photo
+
+  isResolved      Boolean       @default(false)
+  resolvedBy      String?       // ID of the human GC who fixed it
+  resolutionNotes String?
+
+  createdAt       DateTime      @default(now())
 }
