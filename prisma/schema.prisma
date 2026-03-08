@@ -17,6 +17,20 @@ enum ProjectStatus {
   COMPLETED
 }
 
+enum TransactionType {
+  CLIENT_DRAW_INVOICE
+  SUB_PAYOUT
+  GC_FEE_PROFIT
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  DISPUTED
+}
+
 enum AgentRole {
   ORCHESTRATOR
   VISION_ANALYST
@@ -46,6 +60,7 @@ model Project {
   subcontractors    ProjectSub[]
   clients           User[]
   clientUpdates     ClientUpdate[]
+  transactions      Transaction[]
   createdAt         DateTime       @default(now())
 }
 
@@ -97,13 +112,15 @@ model SiteMedia {
 }
 
 model ProjectSub {
-  id              String    @id @default(uuid())
-  projectId       String
-  project         Project   @relation(fields: [projectId], references: [id])
-  name            String
-  trade           String    // e.g., Plumbing, Electrical
-  phoneNumber     String
-  rating          Float     @default(5.0)
+  id               String    @id @default(uuid())
+  projectId        String
+  project          Project   @relation(fields: [projectId], references: [id])
+  name             String
+  trade            String    // e.g., Plumbing, Electrical
+  phoneNumber      String
+  rating           Float     @default(5.0)
+  stripeAccountId  String?   @unique // Stripe Connect ID to pay the sub
+  onboardingStatus String    @default("PENDING") // PENDING, ACTIVE, RESTRICTED
 }
 
 model ClientUpdate {
@@ -126,9 +143,25 @@ model ClientUpdate {
   published       Boolean   @default(false) // Allows GC to review, or set to auto-publish
 }
 
+model Transaction {
+  id               String            @id @default(uuid())
+  projectId        String
+  project          Project           @relation(fields: [projectId], references: [id])
+  milestoneId      String?           // Ties the money directly to the work
+  amount           Decimal
+  type             TransactionType
+  status           TransactionStatus @default(PENDING)
+  stripeChargeId   String?           @unique
+  stripeTransferId String?           @unique
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  role      String   // CLIENT or ADMIN
-  projects  Project[]
+  id               String   @id @default(uuid())
+  email            String   @unique
+  role             String   // CLIENT or ADMIN
+  stripeCustomerId String?  @unique // To charge the homeowner
+  projects         Project[]
 }
