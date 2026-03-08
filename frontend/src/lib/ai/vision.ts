@@ -38,7 +38,8 @@ You are evaluating a photo uploaded from a job site to verify if a specific mile
 - Title: "${ctx.milestone.title}"
 - Description: "${ctx.milestone.description}"
 - Current Status: ${ctx.milestone.status}
-- Scheduled Start: ${ctx.milestone.scheduledStart.toISOString()}
+- Scheduled: ${ctx.milestone.scheduledStart.toISOString()} → ${ctx.milestone.scheduledEnd.toISOString()}
+- Lead Time: ${ctx.milestone.leadTimeDays} days
 
 **Your Task:**
 Analyze the image specifically looking for evidence of the Pending Milestone. Be highly critical. If the task looks incomplete or sloppy, flag it. Do not assume unseen work is done.

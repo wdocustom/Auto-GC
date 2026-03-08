@@ -60,7 +60,28 @@ export async function POST(
         },
       });
 
-      // TODO: Trigger Event -> Notify Next Subcontractor in Gantt sequence
+      // Cascade: find downstream milestones that depend on this one
+      const downstream = await prisma.milestone.findMany({
+        where: {
+          projectId,
+          dependsOn: { some: { id: milestoneId } },
+        },
+        include: { dependsOn: true },
+      });
+
+      for (const next of downstream) {
+        // Check if ALL prerequisites are now VERIFIED
+        const allPrereqsMet = next.dependsOn.every(
+          dep => dep.id === milestoneId || dep.status === 'VERIFIED',
+        );
+
+        if (allPrereqsMet) {
+          // TODO: SMS the assigned sub that their work is unblocked
+          console.log(
+            `[DAG] Milestone "${next.title}" is now unblocked (assignedSubId: ${next.assignedSubId}, leadTime: ${next.leadTimeDays}d)`,
+          );
+        }
+      }
 
     } else if (visionAnalysis.action === 'REJECT' || visionAnalysis.qualityIssuesDetected) {
       // Auto-reject and log for the Orchestrator to text the sub

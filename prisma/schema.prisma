@@ -54,9 +54,19 @@ model Milestone {
   project         Project   @relation(fields: [projectId], references: [id])
   title           String
   description     String
-  status          String    // PENDING, IN_PROGRESS, VERIFIED
+  status          String    // PENDING, IN_PROGRESS, VERIFIED, DELAYED
+
   scheduledStart  DateTime
+  scheduledEnd    DateTime
   actualEnd       DateTime?
+
+  // The DAG Dependencies (Self-Relation)
+  dependsOn       Milestone[] @relation("MilestoneDependencies")
+  prerequisiteFor Milestone[] @relation("MilestoneDependencies")
+
+  // Logistics Meta
+  assignedSubId   String?     // Link to ProjectSub
+  leadTimeDays    Int         @default(0) // How much notice the sub needs
 
   // Vision Verification
   requiresPhoto   Boolean   @default(true)
