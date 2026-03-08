@@ -59,7 +59,12 @@ export async function POST(req: Request) {
       });
     }
 
-    // 7. Auto-Reply via Twilio (Optional but recommended for feedback)
+    if (aiDecision.actionType === 'ALERT_PM') {
+      // TODO: Wire up PM notification (email, push, Slack, etc.)
+      console.log(`[ALERT_PM] ${aiDecision.intent} from ${senderName} on project "${project.name}": ${aiDecision.summary}`);
+    }
+
+    // 7. Auto-Reply via Twilio
     if (aiDecision.replyText) {
       // TODO: Wire up Twilio outbound SMS here
       console.log(`Auto-replying to ${fromPhone}: ${aiDecision.replyText}`);
