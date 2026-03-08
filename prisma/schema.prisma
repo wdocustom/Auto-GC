@@ -1,0 +1,103 @@
+// This is the blueprint for your Agentic GC Platform
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum ProjectStatus {
+  PLANNING
+  PERMITTING
+  ACTIVE
+  INSPECTION
+  COMPLETED
+}
+
+enum AgentRole {
+  ORCHESTRATOR
+  VISION_ANALYST
+  LOGISTICS_BOT
+  CLIENT_CONCIERGE
+}
+
+model Project {
+  id                String         @id @default(uuid())
+  name              String
+  address           String
+  qrCodeUrl         String?        // Link to the physical site's digital entry
+  dedicatedPhone    String         @unique // The project-specific Twilio number
+  status            ProjectStatus  @default(PLANNING)
+
+  // Financials & Specs
+  budgetTotal       Decimal
+  progressPercent   Int            @default(0)
+
+  // Agentic Memory: Stores the "context" for the AI managing this specific house
+  agentContext      Json?          // Stores project-specific "rules" the AI follows
+
+  // Relations
+  milestones        Milestone[]
+  communications    Communication[]
+  media             SiteMedia[]
+  subcontractors    ProjectSub[]
+  clients           User[]
+  createdAt         DateTime       @default(now())
+}
+
+model Milestone {
+  id              String    @id @default(uuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id])
+  title           String
+  description     String
+  status          String    // PENDING, IN_PROGRESS, VERIFIED
+  scheduledStart  DateTime
+  actualEnd       DateTime?
+
+  // Vision Verification
+  requiresPhoto   Boolean   @default(true)
+  visionLog       String?   // AI's reasoning for marking this complete
+}
+
+model Communication {
+  id              String    @id @default(uuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id])
+  senderPhone     String
+  rawMessage      String    // The original SMS or Voice Transcript
+  aiInterpretation Json?     // What the AI "decided" this message meant
+  wasActioned     Boolean   @default(false)
+  direction       String    // INBOUND or OUTBOUND
+  createdAt       DateTime  @default(now())
+}
+
+model SiteMedia {
+  id              String    @id @default(uuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id])
+  url             String
+  type            String    // IMAGE or VIDEO
+  visionAnalysis  String?   // Detailed AI description of what it "sees" in the photo
+  timestamp       DateTime  @default(now())
+}
+
+model ProjectSub {
+  id              String    @id @default(uuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id])
+  name            String
+  trade           String    // e.g., Plumbing, Electrical
+  phoneNumber     String
+  rating          Float     @default(5.0)
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  role      String   // CLIENT or ADMIN
+  projects  Project[]
+}
